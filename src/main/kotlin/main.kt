@@ -9,6 +9,8 @@ import java.time.ZonedDateTime
 import java.util.*
 
 fun main() {
+    logFile.parentFile.mkdirs()
+    logFile.createNewFile()
     val timer = Timer()
     val task: TimerTask = object : TimerTask() {
         override fun run() {
@@ -16,6 +18,7 @@ fun main() {
         }
     }
     timer.schedule(task, getFirstTime(), 1000 * 60 * 60 * 24)
+    logFile.writeText("Started task\n")
 }
 
 private fun getFirstTime() = Date.from(ZonedDateTime.now().plusDays(1).withHour(3).withMinute(0).toInstant())
@@ -46,9 +49,11 @@ private fun checkAndDelete() {
                     media.part.flatMap { part -> part.stream!!.map { it.file }.plus(part.file) }
                 }
             }.filterNotNull().map { it to seriesDone }
-        }.map { findUpperSeriesFile(File(it.first), it.second) }
-    files.forEach { println("Deleting: $it") }
-    files.forEach { if (!it.deleteRecursively()) println("Error deleting $it") }
+        }
+        .map { findUpperSeriesFile(File(it.first), it.second) }
+
+    files.forEach { logFile.writeText("Deleting: $it\n") }
+    files.forEach { if (!it.deleteRecursively()) logFile.writeText("Error deleting $it\n") }
 }
 
 fun findUpperSeriesFile(file: File, seriesDone: Boolean): File {
