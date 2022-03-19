@@ -17,11 +17,11 @@ fun main() {
             checkAndDelete()
         }
     }
-    timer.schedule(task, getFirstTime(), 1000 * 60 * 60 * 24)
+    timer.schedule(task, Date(), 1000L * 60 * 15) //Every 15 minutes
     logFile.writeText("Started task\n")
 }
 
-private fun getFirstTime() = Date.from(ZonedDateTime.now().plusDays(1).withHour(3).withMinute(0).toInstant())
+val logFile = File("logs/${System.currentTimeMillis()}.txt")
 
 private fun checkAndDelete() {
     val base = "http://127.0.0.1:32400"
