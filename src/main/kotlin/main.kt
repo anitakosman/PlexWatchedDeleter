@@ -17,7 +17,7 @@ fun main() {
         }
     }
     timer.schedule(task, Date(), 1000L * 60 * 15) //Every 15 minutes
-    logFile.writeText("Started task\n")
+    logFile.appendText("Started task\n")
 }
 
 val logFile = File("logs/${System.currentTimeMillis()}.txt")
@@ -31,6 +31,7 @@ val libraryURL = URL("$base/library/sections/3/all$tokenQuery$tokenAnita")
 val subscriptions = mapOf("3918" to listOf(tokenAnita, tokenPhedny)).withDefault { listOf(tokenAnita) }
 
 private fun checkAndDelete() {
+    logFile.appendText("Checking deletion: \n")
     val xmlMapper = XmlMapper(JacksonXmlModule().apply {
         setDefaultUseWrapper(false)
     }).registerKotlinModule()
@@ -76,8 +77,8 @@ private fun checkAndDelete() {
         }
         .map { findUpperSeriesFile(File(it.first), it.second) }
 
-    files.forEach { logFile.writeText("Deleting: $it\n") }
-    files.forEach { if (!it.deleteRecursively()) logFile.writeText("Error deleting $it\n") }
+    files.forEach { logFile.appendText("Deleting: $it\n") }
+    files.forEach { if (!it.deleteRecursively()) logFile.appendText("Error deleting $it\n") }
 }
 
 fun findUpperSeriesFile(file: File, seriesDone: Boolean): File {
