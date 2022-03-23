@@ -78,7 +78,7 @@ private fun checkAndDelete() {
         .map { findUpperSeriesFile(File(it.first), it.second) }
 
     files.forEach { logFile.appendText("Deleting: $it\n") }
-    files.forEach { if (!it.deleteRecursively()) logFile.appendText("Error deleting $it\n") }
+    files.forEach { if (!it.exists() || !it.deleteRecursively()) logFile.appendText("Error deleting $it\n") }
 }
 
 fun findUpperSeriesFile(file: File, seriesDone: Boolean): File {
