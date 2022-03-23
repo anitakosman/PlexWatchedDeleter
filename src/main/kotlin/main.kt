@@ -28,7 +28,7 @@ const val tokenAnita = "xxyBuhnssASHQcCwh-hx"
 const val tokenPhedny = "opVisCZwVzuZaK3_nXt5"
 val libraryURL = URL("$base/library/sections/3/all$tokenQuery$tokenAnita")
 
-val subscriptions = mapOf("3918" to listOf(tokenAnita, tokenPhedny)).withDefault { listOf(tokenAnita) }
+val subscriptions = mapOf("5057" to listOf(tokenAnita, tokenPhedny)).withDefault { listOf(tokenAnita) }
 
 private fun checkAndDelete() {
     logFile.appendText("Checking deletion: \n")
