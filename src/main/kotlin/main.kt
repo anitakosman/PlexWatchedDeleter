@@ -71,7 +71,7 @@ private fun checkAndDelete() {
         .flatMap { (mc, seriesDone) ->
             mc.video.flatMap { video ->
                 video.media.flatMap { media ->
-                    media.part.flatMap { part -> part.stream!!.map { it.file }.plus(part.file) }
+                    media.part.flatMap { part -> (part.stream?.map { it.file } ?: emptyList()).plus(part.file) }
                 }
             }.filterNotNull().map { it to seriesDone }
         }
