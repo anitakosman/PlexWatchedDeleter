@@ -9,7 +9,6 @@ group = "me.anita"
 version = "1.0"
 
 repositories {
-    jcenter()
     mavenCentral()
     maven { url = uri("https://dl.bintray.com/kotlin/kotlinx") }
 }
@@ -30,8 +29,9 @@ tasks.jar {
     configurations["compileClasspath"].forEach { file: File ->
         from(zipTree(file.absoluteFile))
     }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 application {
-    mainClassName = "MainKt"
+    mainClass.set("MainKt")
 }
