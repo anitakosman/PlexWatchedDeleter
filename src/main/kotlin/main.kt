@@ -1,3 +1,4 @@
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.MapperFeature
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -36,7 +37,7 @@ val xmlMapper: ObjectMapper = XmlMapper(JacksonXmlModule().apply { setDefaultUse
     .configure(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES, true)
     .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 val libraries =
-    xmlMapper.readValue(URL("$base$libraryPath$tokenQuery$tokenAnita"), MediaContainer::class.java).directory!!
+    xmlMapper.readValue(URL("$base$libraryPath$tokenQuery$tokenAnita"), MediaContainer::class.java).directories!!
 
 private fun checkAndDelete() {
     logFile.appendText("Starting run\n")
@@ -47,7 +48,7 @@ private fun checkAndDelete() {
                 xmlMapper.readValue(
                     URL("$base$libraryPath/${library.key}/all$tokenQuery$tokenAnita"),
                     MediaContainer::class.java
-                ).directory!!.flatMap { directory ->
+                ).directories!!.flatMap { directory ->
                     xmlMapper.readValue(
                         URL(
                             "$base${
@@ -57,7 +58,7 @@ private fun checkAndDelete() {
                                 )
                             }$tokenQuery$tokenAnita"
                         ), MediaContainer::class.java
-                    ).video!!.onEach { it.seriesTitle = directory.title }
+                    ).videos!!.onEach { it.seriesTitle = directory.title }
                 }
             }
 
@@ -65,7 +66,7 @@ private fun checkAndDelete() {
                 xmlMapper.readValue(
                     URL("$base$libraryPath/${library.key}/all$tokenQuery$tokenAnita"),
                     MediaContainer::class.java
-                ).video!!
+                ).videos!!
             }
 
             else -> emptyList()
@@ -77,7 +78,7 @@ private fun checkAndDelete() {
             val viewCountForToken = xmlMapper.readValue(
                 URL("$base${video.key}$tokenQuery$token"),
                 MediaContainer::class.java
-            ).video!![0].viewCount ?: 0
+            ).videos!![0].viewCount ?: 0
 
             viewCountForToken > 0
         }
@@ -86,10 +87,10 @@ private fun checkAndDelete() {
     val files: List<File> = removableVideos.flatMap {
         xmlMapper.readValue(
             URL("$base${it.key}$tokenQuery$tokenAnita"), MediaContainer::class.java
-        ).video?.flatMap { video ->
-            video.media.flatMap { media ->
-                media.part.flatMap { part ->
-                    (part.stream?.mapNotNull { stream -> stream.file } ?: emptyList())
+        ).videos?.flatMap { video ->
+            video.medias.flatMap { media ->
+                media.parts.flatMap { part ->
+                    (part.streams?.mapNotNull { stream -> stream.file } ?: emptyList())
                         .plus(part.file)
                         .map { file -> File("/home/dennis/plex$file") }
                 }
@@ -105,7 +106,7 @@ private fun checkAndDelete() {
     }
 
     libraries.forEach { library ->
-        library.location?.forEach { location ->
+        library.locations?.forEach { location ->
             File("/home/dennis/plex${location.path}").walkBottomUp().forEach { file ->
                 if (file.extension == "exe" || file.extension == "txt" || file.list()?.isEmpty() == true) {
                     logFile.appendText("Deleting: $file\n")
@@ -118,22 +119,45 @@ private fun checkAndDelete() {
     logFile.appendText("Finished run\n")
 }
 
-data class MediaContainer(val directory: List<Directory>?, val video: List<Video>?)
+data class MediaContainer(
+    @JsonProperty("Directory")
+    val directories: List<Directory>?,
+    @JsonProperty("Video")
+    val videos: List<Video>?
+)
 
-data class Directory(val key: String, val type: String, val title: String, val location: List<Location>?)
+data class Directory(
+    val key: String,
+    val type: String,
+    val title: String,
+    @JsonProperty("Location")
+    val locations: List<Location>?
+)
 
-data class Location(val path: String)
+data class Location(
+    val path: String
+)
 
 data class Video(
     val key: String,
     val title: String,
     var seriesTitle: String?,
     val viewCount: Int?,
-    val media: List<Media>
+    @JsonProperty("Media")
+    val medias: List<Media>
 )
 
-data class Media(val part: List<Part>)
+data class Media(
+    @JsonProperty("Part")
+    val parts: List<Part>
+)
 
-data class Part(val stream: List<Stream>?, val file: String)
+data class Part(
+    @JsonProperty("Stream")
+    val streams: List<Stream>?,
+    val file: String
+)
 
-data class Stream(val file: String?)
+data class Stream(
+    val file: String?
+)
