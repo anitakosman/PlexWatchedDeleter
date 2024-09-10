@@ -1,5 +1,6 @@
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.MapperFeature
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.xml.JacksonXmlModule
 import com.fasterxml.jackson.dataformat.xml.XmlMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
@@ -26,88 +27,110 @@ val logFile = MediaContainer::class.java.protectionDomain.codeSource.location.to
 
 const val base = "http://127.0.0.1:32400"
 const val tokenQuery = "?X-Plex-Token="
-const val tokenAnita = "xxyBuhnssASHQcCwh-hx"
-const val tokenPhedny = "opVisCZwVzuZaK3_nXt5"
-val libraryURL = URL("$base/library/sections/3/all$tokenQuery$tokenAnita")
+const val tokenAnita = "QrnYz46rC1iz_y7KxBrB"
+const val tokenRoflin = "txqY-yZ5xxV3K7Rs2Bb9"
+const val libraryPath = "/library/sections"
+val subscriptions = mapOf("Succession" to listOf(tokenRoflin)).withDefault { listOf(tokenAnita) }
 
-val subscriptions = mapOf("5057" to listOf(tokenAnita, tokenPhedny)).withDefault { listOf(tokenAnita) }
+val xmlMapper: ObjectMapper = XmlMapper(JacksonXmlModule().apply { setDefaultUseWrapper(false) }).registerKotlinModule()
+    .configure(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES, true)
+    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+val libraries =
+    xmlMapper.readValue(URL("$base$libraryPath$tokenQuery$tokenAnita"), MediaContainer::class.java).directory!!
 
 private fun checkAndDelete() {
-    logFile.appendText("Checking deletion: \n")
-    val xmlMapper = XmlMapper(JacksonXmlModule().apply {
-        setDefaultUseWrapper(false)
-    }).registerKotlinModule()
-        .configure(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES, true)
-        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+    logFile.appendText("Starting run\n")
 
-    val watchedSeries = xmlMapper.readValue(libraryURL, MediaContainerLibrary::class.java).directory
-        .filter { it.viewedLeafCount > 0 || subscriptions.getValue(it.ratingKey).contains(tokenPhedny) }
-
-    val videos = watchedSeries
-        .map { directory ->
-            val countedVideos = subscriptions.getValue(directory.ratingKey)
-                .map { token ->
+    val availableVideos = libraries.flatMap { library ->
+        when (library.type) {
+            "show" -> {
+                xmlMapper.readValue(
+                    URL("$base$libraryPath/${library.key}/all$tokenQuery$tokenAnita"),
+                    MediaContainer::class.java
+                ).directory!!.flatMap { directory ->
                     xmlMapper.readValue(
-                        URL(base + directory.key.replace("children", "allLeaves") + tokenQuery + token),
-                        MediaContainerSeries::class.java
-                    )
+                        URL(
+                            "$base${
+                                directory.key.replace(
+                                    "children",
+                                    "allLeaves"
+                                )
+                            }$tokenQuery$tokenAnita"
+                        ), MediaContainer::class.java
+                    ).video!!.onEach { it.seriesTitle = directory.title }
                 }
-                .flatMap { it.video }
-                .groupBy { it.key }
-                .map { (key, videos) -> CountedVideo(key, videos.all { it.viewCount != null }) }
-            CountedMediaContainerSeries(countedVideos, countedVideos.all { it.allWatched })
-        }
-        .flatMap { series ->
-            series.videos
-                .filter { it.allWatched }
-                .map { RemovableVideo(it.key, series.seriesDone) }
-        }
+            }
 
-    val files = videos
-        .map {
-            xmlMapper.readValue(
-                URL(base + it.key + tokenQuery + tokenAnita),
-                MediaContainerSeries::class.java
-            ) to it.seriesDone
-        }
-        .flatMap { (mc, seriesDone) ->
-            mc.video.flatMap { video ->
-                video.media.flatMap { media ->
-                    media.part.flatMap { part -> (part.stream?.map { it.file } ?: emptyList()).plus(part.file) }
-                }
-            }.filterNotNull().map { it to seriesDone }
-        }
-        .map { findUpperSeriesFile(File(it.first), it.second) }
+            "movie" -> {
+                xmlMapper.readValue(
+                    URL("$base$libraryPath/${library.key}/all$tokenQuery$tokenAnita"),
+                    MediaContainer::class.java
+                ).video!!
+            }
 
-    files.forEach { logFile.appendText("Deleting: $it\n") }
-    files.forEach { if (!it.exists() || !it.deleteRecursively()) logFile.appendText("Error deleting $it\n") }
-}
-
-fun findUpperSeriesFile(file: File, seriesDone: Boolean): File {
-    var a: File? = null
-    var f = file
-    var p = f.parentFile
-    while (p.name != "Series") {
-        a = f
-        f = p
-        p = p.parentFile
+            else -> emptyList()
+        }
     }
-    return if (seriesDone || f.name.matches(Regex(".*s\\d\\de\\d\\d.*", RegexOption.IGNORE_CASE))) f else a!!
+
+    val removableVideos = availableVideos.filter { video ->
+        subscriptions.getValue(video.seriesTitle ?: video.title).all { token ->
+            val viewCountForToken = xmlMapper.readValue(
+                URL("$base${video.key}$tokenQuery$token"),
+                MediaContainer::class.java
+            ).video!![0].viewCount ?: 0
+
+            viewCountForToken > 0
+        }
+    }
+
+    val files: List<File> = removableVideos.flatMap {
+        xmlMapper.readValue(
+            URL("$base${it.key}$tokenQuery$tokenAnita"), MediaContainer::class.java
+        ).video?.flatMap { video ->
+            video.media.flatMap { media ->
+                media.part.flatMap { part ->
+                    (part.stream?.mapNotNull { stream -> stream.file } ?: emptyList())
+                        .plus(part.file)
+                        .map { file -> File("/home/dennis/plex$file") }
+                }
+            }
+        } ?: emptyList()
+    }
+
+    files.forEach {
+        logFile.appendText("Deleting: $it\n")
+        if (!it.exists() || !it.deleteRecursively()) {
+            logFile.appendText("Error deleting $it. Check if it still exists.\n")
+        }
+    }
+
+    libraries.forEach { library ->
+        library.location?.forEach { location ->
+            File("/home/dennis/plex${location.path}").walkBottomUp().forEach { file ->
+                if (file.extension == "exe" || file.extension == "txt" || file.list()?.isEmpty() == true) {
+                    logFile.appendText("Deleting: $file\n")
+                    file.deleteRecursively()
+                }
+            }
+        }
+    }
+
+    logFile.appendText("Finished run\n")
 }
 
-data class MediaContainerLibrary(val directory: List<Directory>)
+data class MediaContainer(val directory: List<Directory>?, val video: List<Video>?)
 
-data class Directory(val key: String, val viewedLeafCount: Int, val ratingKey: String)
+data class Directory(val key: String, val type: String, val title: String, val location: List<Location>?)
 
-data class MediaContainerSeries(val video: List<Video>)
+data class Location(val path: String)
 
-data class CountedMediaContainerSeries(val videos: List<CountedVideo>, val seriesDone: Boolean)
-
-data class Video(val viewCount: Int?, val key: String, val media: List<Media>)
-
-data class CountedVideo(val key: String, val allWatched: Boolean)
-
-data class RemovableVideo(val key: String, val seriesDone: Boolean)
+data class Video(
+    val key: String,
+    val title: String,
+    var seriesTitle: String?,
+    val viewCount: Int?,
+    val media: List<Media>
+)
 
 data class Media(val part: List<Part>)
 
