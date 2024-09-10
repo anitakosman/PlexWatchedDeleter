@@ -6,6 +6,7 @@ import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import java.io.File
 import java.net.URL
 import java.util.*
+import kotlin.io.path.toPath
 
 fun main() {
     logFile.parentFile.mkdirs()
@@ -20,7 +21,8 @@ fun main() {
     logFile.appendText("Started task\n")
 }
 
-val logFile = File("logs/${System.currentTimeMillis()}.txt")
+val logFile = MediaContainer::class.java.protectionDomain.codeSource.location.toURI().toPath().parent.toFile()
+    .resolve("logs/${System.currentTimeMillis()}.txt")
 
 const val base = "http://127.0.0.1:32400"
 const val tokenQuery = "?X-Plex-Token="
