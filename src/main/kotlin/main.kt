@@ -11,6 +11,7 @@ import java.io.File
 import java.net.URL
 import java.util.*
 import kotlin.io.path.toPath
+import kotlin.system.exitProcess
 import kotlin.time.Duration.Companion.minutes
 
 fun main() {
@@ -19,7 +20,11 @@ fun main() {
     val timer = Timer()
     val task: TimerTask = object : TimerTask() {
         override fun run() {
-            checkAndDelete()
+            try {
+                checkAndDelete()
+            } catch (_: Throwable) {
+                exitProcess(1)
+            }
         }
     }
     timer.schedule(task, Date(), 15.minutes.inWholeMilliseconds)
