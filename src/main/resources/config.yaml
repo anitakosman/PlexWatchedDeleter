@@ -1,0 +1,15 @@
+plexBaseDirectory: /path/to/plex/base
+mainUserToken: <YOUR_PLEX_TOKEN>
+users:
+  - name: User 1
+    token: <USER_1_PLEX_TOKEN>
+    subscriptions:
+      # Subscribes this user to all content
+      - All
+      # Negative subscription can be used when All is present to exclude specific titles
+      - -Title
+  - name: User 2
+    token: <USER_2_PLEX_TOKEN>
+    subscriptions:
+      # Subscribes this user to movie or series with this title
+      - Title

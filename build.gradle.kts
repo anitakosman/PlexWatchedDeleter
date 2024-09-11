@@ -1,7 +1,8 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    kotlin("jvm") version "1.6.10"
+    kotlin("jvm") version "2.0.20"
     application
 }
 
@@ -14,12 +15,21 @@ repositories {
 }
 
 dependencies {
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.12.3")
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.12.3")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17+")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.17+")
+    implementation("com.sksamuel.hoplite:hoplite-core:2.7.5")
+    implementation("com.sksamuel.hoplite:hoplite-yaml:2.7.5")
+    implementation("org.yaml:snakeyaml:2.3")
+    implementation("com.sksamuel.hoplite:hoplite-watch:2.7.5")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.6.4")
 }
 
-tasks.withType<KotlinCompile>() {
-    kotlinOptions.jvmTarget = "10"
+tasks.withType<KotlinCompile> {
+    compilerOptions.jvmTarget.set(JVM_21)
+}
+
+tasks.withType<JavaCompile> {
+    targetCompatibility = "21"
 }
 
 tasks.jar {
