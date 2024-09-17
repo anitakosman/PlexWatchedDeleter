@@ -1,4 +1,3 @@
-import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.xml.JacksonXmlModule
@@ -14,6 +13,9 @@ import kotlin.io.path.toPath
 import kotlin.system.exitProcess
 import kotlin.time.Duration.Companion.minutes
 
+/**
+ * Creates log file and starts a task to run the checkAndDelete function every 15 minutes.
+ */
 fun main() {
     logFile.parentFile.mkdirs()
     logFile.createNewFile()
@@ -31,22 +33,49 @@ fun main() {
     logFile.appendText("Started task\n")
 }
 
+/**
+ * Base URL for local plex server
+ */
 const val base = "http://127.0.0.1:32400"
+
+/**
+ * Plex token query parameter
+ */
 const val tokenQuery = "?X-Plex-Token="
+
+/**
+ * Relative path to Plex library sections
+ */
 const val libraryPath = "/library/sections"
 
+/**
+ * Log file which can be found in the directory logs (which will be location in the same place as the executable)
+ */
 val logFile = MediaContainer::class.java.protectionDomain.codeSource.location.toURI().toPath().parent.toFile()
     .resolve("logs/${System.currentTimeMillis()}.txt")
 
+/**
+ * Jackson XML Mapper which doesn't fail on unknown properties
+ */
+val xmlMapper: ObjectMapper = XmlMapper(JacksonXmlModule().apply { setDefaultUseWrapper(false) }).registerKotlinModule()
+    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+
+/**
+ * Config loader which reads environment variables (with config.override. prefix), system properties (with config.override. prefix (so -Dconfig.override.property for JVM)), 
+ * user settings (in ~/.userconfig.yaml) and default configuration values (config.yaml resource) with precedence in that order
+ */
 val reloadableConfig =
     ReloadableConfig(ConfigLoaderBuilder.default().addResourceSource("/config.yaml").build(), Config::class)
         .addInterval(15.minutes)
 
-val xmlMapper: ObjectMapper = XmlMapper(JacksonXmlModule().apply { setDefaultUseWrapper(false) }).registerKotlinModule()
-    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-
+/**
+ * Config read from config loader
+ */
 var config: Config = reloadableConfig.getLatest()
 
+/**
+ * Checks with files available on the plex server have been watched and thus can be deleted
+ */
 private fun checkAndDelete() {
     logFile.appendText("Starting run\n")
     config = reloadableConfig.getLatest()
@@ -73,11 +102,17 @@ private fun checkAndDelete() {
     logFile.appendText("Finished run\n")
 }
 
+/**
+ * Returns a map of series and/or movie titles to lists of tokens of users who have subscribed to that series or movie in the config
+ */
 private fun getSubscriptions() = config.users
     .flatMap { user -> user.subscriptions.map { it to user.token } }
     .groupBy({ it.first }, { it.second })
     .withDefault { emptyList() }
 
+/**
+ * Returns all available videos on the Plex server
+ */
 private fun getAvailableVideos(libraries: List<Directory>) = libraries.flatMap { library ->
     when (library.type) {
         "show" -> {
@@ -109,6 +144,9 @@ private fun getAvailableVideos(libraries: List<Directory>) = libraries.flatMap {
     }
 }
 
+/**
+ * Returns true iff all users who have subscribed to the movie or series of the video have watched the video
+ */
 private fun allSubscribersWatched(video: Video, subscriptions: Map<String, List<String>>): Boolean {
     val title = video.seriesTitle ?: video.title
     val subscribers = subscriptions.getValue(title)
@@ -129,6 +167,9 @@ private fun allSubscribersWatched(video: Video, subscriptions: Map<String, List<
     }
 }
 
+/**
+ * Get all files associated with a video (including associated subtitle files) 
+ */
 private fun getFiles(it: Video) = xmlMapper.readValue(
     URL("$base${it.key}$tokenQuery${config.mainUserToken}"), MediaContainer::class.java
 ).videos?.flatMap { video ->
@@ -141,6 +182,9 @@ private fun getFiles(it: Video) = xmlMapper.readValue(
     }
 } ?: emptyList()
 
+/**
+ * Clean up files with unwanted extensions and empty directories
+ */
 private fun cleanUpUnwantedFilesAndEmptyDirectories(libraries: List<Directory>) {
     libraries.forEach { library ->
         library.locations?.forEach { location ->
@@ -153,51 +197,3 @@ private fun cleanUpUnwantedFilesAndEmptyDirectories(libraries: List<Directory>) 
         }
     }
 }
-
-// Plex XML Mapper data classes
-data class MediaContainer(
-    @JsonProperty("Directory")
-    val directories: List<Directory>?,
-    @JsonProperty("Video")
-    val videos: List<Video>?
-)
-
-data class Directory(
-    val key: String,
-    val type: String,
-    val title: String,
-    @JsonProperty("Location")
-    val locations: List<Location>?
-)
-
-data class Location(
-    val path: String
-)
-
-data class Video(
-    val key: String,
-    val title: String,
-    var seriesTitle: String?,
-    val viewCount: Int?,
-    @JsonProperty("Media")
-    val medias: List<Media>
-)
-
-data class Media(
-    @JsonProperty("Part")
-    val parts: List<Part>
-)
-
-data class Part(
-    @JsonProperty("Stream")
-    val streams: List<Stream>?,
-    val file: String
-)
-
-data class Stream(
-    val file: String?
-)
-
-// Configuration data classes
-data class Config(val plexBaseDirectory: String?, val unwantedFileExtensions: List<String>, val mainUserToken: String, val users: List<User>)
-data class User(val name: String, val token: String, val subscriptions: List<String>)
