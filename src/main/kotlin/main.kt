@@ -31,6 +31,10 @@ fun main() {
     logFile.appendText("Started task\n")
 }
 
+const val base = "http://127.0.0.1:32400"
+const val tokenQuery = "?X-Plex-Token="
+const val libraryPath = "/library/sections"
+
 val logFile = MediaContainer::class.java.protectionDomain.codeSource.location.toURI().toPath().parent.toFile()
     .resolve("logs/${System.currentTimeMillis()}.txt")
 
@@ -38,27 +42,25 @@ val reloadableConfig =
     ReloadableConfig(ConfigLoaderBuilder.default().addResourceSource("/config.yaml").build(), Config::class)
         .addInterval(15.minutes)
 
-const val base = "http://127.0.0.1:32400"
-const val tokenQuery = "?X-Plex-Token="
-const val libraryPath = "/library/sections"
-
 val xmlMapper: ObjectMapper = XmlMapper(JacksonXmlModule().apply { setDefaultUseWrapper(false) }).registerKotlinModule()
     .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
+var config: Config = reloadableConfig.getLatest()
+
 private fun checkAndDelete() {
     logFile.appendText("Starting run\n")
+    config = reloadableConfig.getLatest()
 
-    val config = reloadableConfig.getLatest()
     val libraries = xmlMapper.readValue(
         URL("$base$libraryPath$tokenQuery${config.mainUserToken}"),
         MediaContainer::class.java
     ).directories!!
 
-    val subscriptions: Map<String, List<String>> = getSubscriptions(config)
+    val subscriptions: Map<String, List<String>> = getSubscriptions()
 
-    getAvailableVideos(libraries, config)
+    getAvailableVideos(libraries)
         .filter { allSubscribersWatched(it, subscriptions) }
-        .flatMap { getFiles(it, config) }
+        .flatMap { getFiles(it) }
         .forEach {
             logFile.appendText("Deleting: $it\n")
             if (!it.exists() || !it.deleteRecursively()) {
@@ -66,17 +68,17 @@ private fun checkAndDelete() {
             }
         }
 
-    cleanUpUnwantedFilesAndEmptyDirectories(libraries, config)
+    cleanUpUnwantedFilesAndEmptyDirectories(libraries)
 
     logFile.appendText("Finished run\n")
 }
 
-private fun getSubscriptions(config: Config) = config.users
+private fun getSubscriptions() = config.users
     .flatMap { user -> user.subscriptions.map { it to user.token } }
     .groupBy({ it.first }, { it.second })
     .withDefault { emptyList() }
 
-private fun getAvailableVideos(libraries: List<Directory>, config: Config) = libraries.flatMap { library ->
+private fun getAvailableVideos(libraries: List<Directory>) = libraries.flatMap { library ->
     when (library.type) {
         "show" -> {
             xmlMapper.readValue(
@@ -114,16 +116,20 @@ private fun allSubscribersWatched(video: Video, subscriptions: Map<String, List<
         .minus(subscriptions.getValue("-$title"))
 
     return subscribers.all { token ->
-        val viewCountForToken = xmlMapper.readValue(
-            URL("$base${video.key}$tokenQuery$token"),
-            MediaContainer::class.java
-        ).videos!![0].viewCount ?: 0
+        val viewCountForToken = if (token == config.mainUserToken) {
+            video.viewCount ?: 0
+        } else {
+            xmlMapper.readValue(
+                URL("$base${video.key}$tokenQuery$token"),
+                MediaContainer::class.java
+            ).videos!![0].viewCount ?: 0
+        }
 
         viewCountForToken > 0
     }
 }
 
-private fun getFiles(it: Video, config: Config) = xmlMapper.readValue(
+private fun getFiles(it: Video) = xmlMapper.readValue(
     URL("$base${it.key}$tokenQuery${config.mainUserToken}"), MediaContainer::class.java
 ).videos?.flatMap { video ->
     video.medias.flatMap { media ->
@@ -135,7 +141,7 @@ private fun getFiles(it: Video, config: Config) = xmlMapper.readValue(
     }
 } ?: emptyList()
 
-private fun cleanUpUnwantedFilesAndEmptyDirectories(libraries: List<Directory>, config: Config) {
+private fun cleanUpUnwantedFilesAndEmptyDirectories(libraries: List<Directory>) {
     libraries.forEach { library ->
         library.locations?.forEach { location ->
             File("${config.plexBaseDirectory ?: ""}${location.path}").walkBottomUp().forEach { file ->
