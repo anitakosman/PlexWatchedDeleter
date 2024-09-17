@@ -1,4 +1,8 @@
 plexBaseDirectory: /path/to/plex/base
+unwantedFileExtensions:
+  - exe
+  - txt
+  - png
 mainUserToken: <YOUR_PLEX_TOKEN>
 users:
   - name: User 1

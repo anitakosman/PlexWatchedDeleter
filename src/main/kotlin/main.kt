@@ -139,7 +139,7 @@ private fun cleanUpUnwantedFilesAndEmptyDirectories(libraries: List<Directory>, 
     libraries.forEach { library ->
         library.locations?.forEach { location ->
             File("${config.plexBaseDirectory ?: ""}${location.path}").walkBottomUp().forEach { file ->
-                if (file.extension == "exe" || file.extension == "txt" || file.list()?.isEmpty() == true) {
+                if (file.extension in config.unwantedFileExtensions || file.list()?.isEmpty() == true) {
                     logFile.appendText("Deleting: $file\n")
                     file.deleteRecursively()
                 }
@@ -193,5 +193,5 @@ data class Stream(
 )
 
 // Configuration data classes
-data class Config(val plexBaseDirectory: String?, val mainUserToken: String, val users: List<User>)
+data class Config(val plexBaseDirectory: String?, val unwantedFileExtensions: List<String>, val mainUserToken: String, val users: List<User>)
 data class User(val name: String, val token: String, val subscriptions: List<String>)
