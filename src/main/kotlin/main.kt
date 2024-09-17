@@ -6,12 +6,61 @@ import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.sksamuel.hoplite.ConfigLoaderBuilder
 import com.sksamuel.hoplite.addResourceSource
 import com.sksamuel.hoplite.watch.ReloadableConfig
+import kotlinx.datetime.*
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.format.char
 import java.io.File
 import java.net.URL
 import java.util.*
+import kotlin.io.path.absolutePathString
 import kotlin.io.path.toPath
 import kotlin.system.exitProcess
 import kotlin.time.Duration.Companion.minutes
+
+/**
+ * Base URL for local plex server
+ */
+const val base = "http://127.0.0.1:32400"
+
+/**
+ * Plex token query parameter
+ */
+const val tokenQuery = "?X-Plex-Token="
+
+/**
+ * Relative path to Plex library sections
+ */
+const val libraryPath = "/library/sections"
+
+/**
+ * Jackson XML Mapper which doesn't fail on unknown properties
+ */
+val xmlMapper: ObjectMapper = XmlMapper(JacksonXmlModule().apply { setDefaultUseWrapper(false) }).registerKotlinModule()
+    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+
+/**
+ * Config loader which reads environment variables (with config.override. prefix), system properties (with config.override. prefix (so -Dconfig.override.property for JVM)),
+ * user settings (in ~/.userconfig.yaml) and default configuration values (config.yaml resource) with precedence in that order
+ */
+val reloadableConfig =
+    ReloadableConfig(ConfigLoaderBuilder.default().addResourceSource("/config.yaml").build(), Config::class)
+        .addInterval(15.minutes)
+
+/**
+ * Config read from config loader
+ */
+var config: Config = reloadableConfig.getLatest()
+
+/**
+ * The datetime format to user for log file name
+ */
+val dateTimeFormat = 
+    LocalDateTime.Format { year(); char('-'); monthNumber(); char('-'); dayOfMonth(); char('-'); hour(); char(':'); minute(); char(':'); second() }
+
+/**
+ * Log file with current timestamp as name
+ */
+val logFile = File(getLogFileLocation()).resolve("${Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).format(dateTimeFormat)}.txt")
 
 /**
  * Creates log file and starts a task to run the checkAndDelete function every 15 minutes.
@@ -34,44 +83,10 @@ fun main() {
 }
 
 /**
- * Base URL for local plex server
+ * Returns log file location from config with $EXECUTABLE_DIR$ replaced by the actual directory containing the executable
  */
-const val base = "http://127.0.0.1:32400"
-
-/**
- * Plex token query parameter
- */
-const val tokenQuery = "?X-Plex-Token="
-
-/**
- * Relative path to Plex library sections
- */
-const val libraryPath = "/library/sections"
-
-/**
- * Log file which can be found in the directory logs (which will be location in the same place as the executable)
- */
-val logFile = MediaContainer::class.java.protectionDomain.codeSource.location.toURI().toPath().parent.toFile()
-    .resolve("logs/${System.currentTimeMillis()}.txt")
-
-/**
- * Jackson XML Mapper which doesn't fail on unknown properties
- */
-val xmlMapper: ObjectMapper = XmlMapper(JacksonXmlModule().apply { setDefaultUseWrapper(false) }).registerKotlinModule()
-    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-
-/**
- * Config loader which reads environment variables (with config.override. prefix), system properties (with config.override. prefix (so -Dconfig.override.property for JVM)), 
- * user settings (in ~/.userconfig.yaml) and default configuration values (config.yaml resource) with precedence in that order
- */
-val reloadableConfig =
-    ReloadableConfig(ConfigLoaderBuilder.default().addResourceSource("/config.yaml").build(), Config::class)
-        .addInterval(15.minutes)
-
-/**
- * Config read from config loader
- */
-var config: Config = reloadableConfig.getLatest()
+private fun getLogFileLocation() = config.logFileDirectory
+    .replace("\$EXECUTABLE_DIR\$", MediaContainer::class.java.protectionDomain.codeSource.location.toURI().toPath().parent.absolutePathString())
 
 /**
  * Checks with files available on the plex server have been watched and thus can be deleted
@@ -168,7 +183,7 @@ private fun allSubscribersWatched(video: Video, subscriptions: Map<String, List<
 }
 
 /**
- * Get all files associated with a video (including associated subtitle files) 
+ * Get all files associated with a video (including associated subtitle files)
  */
 private fun getFiles(it: Video) = xmlMapper.readValue(
     URL("$base${it.key}$tokenQuery${config.mainUserToken}"), MediaContainer::class.java

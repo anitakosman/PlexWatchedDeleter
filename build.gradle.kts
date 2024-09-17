@@ -22,6 +22,7 @@ dependencies {
     implementation("org.yaml:snakeyaml:2.3")
     implementation("com.sksamuel.hoplite:hoplite-watch:2.7.5")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.6.4")
+    implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.1")
 }
 
 tasks.withType<KotlinCompile> {

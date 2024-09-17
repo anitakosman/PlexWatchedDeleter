@@ -1,4 +1,5 @@
 plexBaseDirectory: /path/to/plex/base
+logFileDirectory: $EXECUTABLE_DIR$/logs
 unwantedFileExtensions:
   - exe
   - txt
